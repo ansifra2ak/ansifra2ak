@@ -1,16 +1,38 @@
-## Hi there 👋
+# Hi 👋, I'm Ansif Rasak
 
-<!--
-**ansifra2ak/ansifra2ak** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
+### 🚀 Aspiring Data Scientist | MSc Data Science @ GITAM
 
-Here are some ideas to get you started:
+I'm passionate about Data Science, Machine Learning, and Artificial Intelligence. I enjoy building real-world projects using Python and transforming data into meaningful insights.
 
-- 🔭 I’m currently working on ...
-- 🌱 I’m currently learning ...
-- 👯 I’m looking to collaborate on ...
-- 🤔 I’m looking for help with ...
-- 💬 Ask me about ...
-- 📫 How to reach me: ...
-- 😄 Pronouns: ...
-- ⚡ Fun fact: ...
--->
+---
+
+## 👨‍💻 About Me
+
+- 🎓 MSc Data Science Student at GITAM University
+- 🌱 Currently learning Machine Learning, Deep Learning & FastAPI
+- 💡 Interested in Data Science, AI and Data Analytics
+- 💻 Building practical Data Science projects
+- 🎯 Goal: Become a Junior Data Scientist
+
+---
+
+## 🛠️ Skills
+
+- Python
+- SQL
+- Machine Learning
+- Power BI
+- Pandas
+- NumPy
+- Scikit-learn
+- Microsoft Excel
+- Git & GitHub
+
+---
+
+## 📫 Connect With Me
+
+- LinkedIn: https://www.linkedin.com/in/ansif-rasak-43ba583a9/
+- GitHub: https://github.com/ansifra2ak
+
+⭐ Thanks for visiting my profile!
