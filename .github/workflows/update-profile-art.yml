@@ -9,6 +9,7 @@ on:
     paths:
       - "image.png"
       - "scripts/**"
+      - ".github/workflows/update-profile-art.yml"
 
 permissions:
   contents: write
@@ -39,8 +40,12 @@ jobs:
         run: |
           python scripts/make_ascii_svg.py
 
-      - name: Commit generated portrait
+      - name: Generate contribution heatmap
+        run: |
+          python scripts/make_contrib_heatmap.py
+
+      - name: Commit generated profile art
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "chore: regenerate ASCII profile portrait"
-          file_pattern: "source-prepped.png ansif-ascii.svg"
+          commit_message: "chore: refresh profile art"
+          file_pattern: "source-prepped.png ansif-ascii.svg contrib-heatmap.svg"
