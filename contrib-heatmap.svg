@@ -1,412 +1,4221 @@
-import os
-import json
-import urllib.request
-from datetime import datetime, timezone, timedelta
-from xml.sax.saxutils import escape
 
+<svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="888"
+    height="158"
+    viewBox="0 0 888 158"
+    font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif"
+>
 
-USERNAME = os.getenv("GITHUB_USERNAME", "ansifra2ak")
-TOKEN = os.getenv("GITHUB_TOKEN") or os.getenv("GH_TOKEN")
-OUTPUT = "contrib-heatmap.svg"
-
-WIDTH = 860
-HEIGHT = 210
-
-BG = "#0d1117"
-TEXT = "#8b949e"
-TEXT_BRIGHT = "#c9d1d9"
-EMPTY = "#161b22"
-
-LEVELS = {
-    0: EMPTY,
-    1: "#0e4429",
-    2: "#006d32",
-    3: "#26a641",
-    4: "#39d353",
-}
-
-
-def fetch_contributions():
-    if not TOKEN:
-        raise RuntimeError(
-            "GITHUB_TOKEN is missing. "
-            "The workflow must pass GITHUB_TOKEN to this script."
-        )
-
-    now = datetime.now(timezone.utc)
-    start = now - timedelta(days=370)
-
-    query = """
-    query($login: String!, $from: DateTime!, $to: DateTime!) {
-      user(login: $login) {
-        contributionsCollection(from: $from, to: $to) {
-          contributionCalendar {
-            totalContributions
-            weeks {
-              firstDay
-              contributionDays {
-                date
-                contributionCount
-                contributionLevel
-                weekday
-              }
-            }
-          }
-        }
-      }
-    }
-    """
-
-    payload = {
-        "query": query,
-        "variables": {
-            "login": USERNAME,
-            "from": start.isoformat(),
-            "to": now.isoformat(),
-        },
-    }
-
-    request = urllib.request.Request(
-        "https://api.github.com/graphql",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {TOKEN}",
-            "Content-Type": "application/json",
-            "User-Agent": "github-profile-heatmap",
-        },
-        method="POST",
-    )
-
-    with urllib.request.urlopen(request, timeout=30) as response:
-        data = json.loads(response.read().decode("utf-8"))
-
-    if "errors" in data:
-        raise RuntimeError(
-            "GitHub GraphQL error: "
-            + json.dumps(data["errors"], indent=2)
-        )
-
-    user = data.get("data", {}).get("user")
-
-    if not user:
-        raise RuntimeError(f"GitHub user '{USERNAME}' was not found.")
-
-    return user["contributionsCollection"]["contributionCalendar"]
-
-
-def color_for_level(level_name):
-    mapping = {
-        "NONE": LEVELS[0],
-        "FIRST_QUARTILE": LEVELS[1],
-        "SECOND_QUARTILE": LEVELS[2],
-        "THIRD_QUARTILE": LEVELS[3],
-        "FOURTH_QUARTILE": LEVELS[4],
-    }
-    return mapping.get(level_name, LEVELS[0])
-
-
-def month_labels(weeks):
-    labels = []
-    previous_month = None
-
-    for week_index, week in enumerate(weeks):
-        first_day = datetime.strptime(
-            week["firstDay"], "%Y-%m-%d"
-        )
-
-        month = first_day.month
-
-        if month != previous_month:
-            labels.append(
-                (
-                    week_index,
-                    first_day.strftime("%b"),
-                )
-            )
-            previous_month = month
-
-    return labels
-
-
-def generate_svg(calendar):
-    weeks = calendar["weeks"]
-
-    # GitHub can occasionally return 54 partial weeks.
-    if len(weeks) > 53:
-        weeks = weeks[-53:]
-
-    total = sum(
-        day["contributionCount"]
-        for week in weeks
-        for day in week["contributionDays"]
-    )
-
-    cell = 11
-    gap = 3
-    step = cell + gap
-
-    grid_x = 72
-    grid_y = 55
-
-    graph_width = len(weeks) * step
-
-    svg = []
-
-    svg.append(
-        f'''<svg xmlns="http://www.w3.org/2000/svg"
-width="{WIDTH}"
-height="{HEIGHT}"
-viewBox="0 0 {WIDTH} {HEIGHT}"
-role="img"
-aria-labelledby="title desc">'''
-    )
-
-    svg.append(
-        f"<title id=\"title\">{escape(USERNAME)} GitHub contribution graph</title>"
-    )
-
-    svg.append(
-        f"<desc id=\"desc\">{total} contributions in the last year</desc>"
-    )
-
-    svg.append(
-        f'<rect width="{WIDTH}" height="{HEIGHT}" rx="8" fill="{BG}"/>'
-    )
-
-    svg.append(
-        """
 <style>
-text {
-    font-family:
-        ui-monospace,
-        SFMono-Regular,
-        Menlo,
-        Monaco,
-        Consolas,
-        "Liberation Mono",
-        "Courier New",
-        monospace;
-}
 
-.cell {
-    transform-box: fill-box;
-    transform-origin: center;
-    animation: reveal 700ms cubic-bezier(.2,.8,.2,1) both;
-}
+    .label {
+        fill: #7d8590;
+        font-size: 13px;
+        font-weight: 600;
+    }
 
-@keyframes reveal {
-    0% {
+    .total {
+        fill: #e6edf3;
+        font-size: 15px;
+        font-weight: 700;
+    }
+
+    .cell {
+        transform-box: fill-box;
+        transform-origin: center;
+
         opacity: 0;
-        transform: scale(.25);
-    }
-    60% {
-        opacity: 1;
-        transform: scale(1.12);
-    }
-    100% {
-        opacity: 1;
-        transform: scale(1);
-    }
-}
 
-.cursor {
-    animation: blink 1s steps(2, start) infinite;
-}
-
-@keyframes blink {
-    50% {
-        opacity: 0;
+        animation:
+            pop 0.55s ease-out both;
     }
-}
+
+    @keyframes pop {
+
+        0% {
+            opacity: 0;
+            transform: scale(0.2);
+        }
+
+        60% {
+            opacity: 1;
+            transform: scale(1.1);
+        }
+
+        100% {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+    }
+
 </style>
-"""
-    )
 
-    # Terminal-style command line
-    svg.append(
-        f'''
+
+<rect
+    width="888"
+    height="158"
+    fill="none"
+/>
+
+
+
 <text
-    x="{WIDTH / 2}"
-    y="24"
-    text-anchor="middle"
-    fill="{TEXT_BRIGHT}"
-    font-size="15"
-    font-weight="700">
-    {escape(USERNAME)}@github ~ $ ./contributions.sh
+    class="label"
+    x="34"
+    y="16"
+>
+    Sep
 </text>
-'''
-    )
 
-    # Month labels
-    for week_index, month in month_labels(weeks):
-        x = grid_x + week_index * step
-
-        svg.append(
-            f'''
 <text
-    x="{x}"
-    y="{grid_y - 13}"
-    fill="{TEXT}"
-    font-size="10">
-    {month}
+    class="label"
+    x="82"
+    y="16"
+>
+    Oct
 </text>
-'''
-        )
 
-    # Day labels
-    day_labels = {
-        1: "Mon",
-        3: "Wed",
-        5: "Fri",
-    }
-
-    for weekday, label in day_labels.items():
-        y = grid_y + weekday * step + 9
-
-        svg.append(
-            f'''
 <text
-    x="{grid_x - 10}"
-    y="{y}"
-    text-anchor="end"
-    fill="{TEXT}"
-    font-size="10">
-    {label}
+    class="label"
+    x="146"
+    y="16"
+>
+    Nov
 </text>
-'''
-        )
 
-    # Contribution cells
-    animation_index = 0
+<text
+    class="label"
+    x="226"
+    y="16"
+>
+    Dec
+</text>
 
-    for week_index, week in enumerate(weeks):
-        for day in week["contributionDays"]:
-            weekday = int(day["weekday"])
+<text
+    class="label"
+    x="290"
+    y="16"
+>
+    Jan
+</text>
 
-            x = grid_x + week_index * step
-            y = grid_y + weekday * step
+<text
+    class="label"
+    x="354"
+    y="16"
+>
+    Feb
+</text>
 
-            count = int(day["contributionCount"])
-            color = color_for_level(
-                day["contributionLevel"]
-            )
+<text
+    class="label"
+    x="418"
+    y="16"
+>
+    Mar
+</text>
 
-            delay = animation_index * 0.006
-            animation_index += 1
+<text
+    class="label"
+    x="498"
+    y="16"
+>
+    Apr
+</text>
 
-            date = escape(day["date"])
+<text
+    class="label"
+    x="562"
+    y="16"
+>
+    May
+</text>
 
-            svg.append(
-                f'''
+<text
+    class="label"
+    x="642"
+    y="16"
+>
+    Jun
+</text>
+
+<text
+    class="label"
+    x="706"
+    y="16"
+>
+    Jul
+</text>
+
+<text
+    class="label"
+    x="770"
+    y="16"
+>
+    Aug
+</text>
+
+<text
+    class="label"
+    x="850"
+    y="16"
+>
+    Sep
+</text>
+
+<text
+    class="label"
+    x="2"
+    y="51"
+>
+    Mon
+</text>
+
+<text
+    class="label"
+    x="2"
+    y="83"
+>
+    Wed
+</text>
+
+<text
+    class="label"
+    x="2"
+    y="115"
+>
+    Fri
+</text>
+
+
+
+
 <rect
     class="cell"
-    x="{x}"
-    y="{y}"
-    width="{cell}"
-    height="{cell}"
-    rx="2"
-    fill="{color}"
-    style="animation-delay:{delay:.3f}s">
-    <title>{date}: {count} contribution{"s" if count != 1 else ""}</title>
-</rect>
-'''
-            )
+    x="34"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.0s"
+/>
 
-    # Contribution total
-    total_y = grid_y + (7 * step) + 21
-
-    svg.append(
-        f'''
-<text
-    x="{grid_x}"
-    y="{total_y}"
-    fill="{TEXT_BRIGHT}"
-    font-size="12"
-    font-weight="700">
-    {total} contributions in the last year
-</text>
-'''
-    )
-
-    # Legend
-    legend_x = min(
-        WIDTH - 175,
-        grid_x + graph_width - 130,
-    )
-
-    legend_y = total_y - 10
-
-    svg.append(
-        f'''
-<text
-    x="{legend_x - 34}"
-    y="{legend_y + 10}"
-    fill="{TEXT}"
-    font-size="9">
-    Less
-</text>
-'''
-    )
-
-    for index, color in enumerate(
-        [
-            LEVELS[0],
-            LEVELS[1],
-            LEVELS[2],
-            LEVELS[3],
-            LEVELS[4],
-        ]
-    ):
-        x = legend_x + index * 15
-
-        svg.append(
-            f'''
 <rect
-    x="{x}"
-    y="{legend_y}"
-    width="10"
-    height="10"
-    rx="2"
-    fill="{color}"/>
-'''
-        )
+    class="cell"
+    x="34"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.036s"
+/>
 
-    svg.append(
-        f'''
+<rect
+    class="cell"
+    x="34"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.072s"
+/>
+
+<rect
+    class="cell"
+    x="34"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.107s"
+/>
+
+<rect
+    class="cell"
+    x="34"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.143s"
+/>
+
+<rect
+    class="cell"
+    x="34"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.179s"
+/>
+
+<rect
+    class="cell"
+    x="34"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.215s"
+/>
+
+<rect
+    class="cell"
+    x="50"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.065s"
+/>
+
+<rect
+    class="cell"
+    x="50"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.101s"
+/>
+
+<rect
+    class="cell"
+    x="50"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.137s"
+/>
+
+<rect
+    class="cell"
+    x="50"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.173s"
+/>
+
+<rect
+    class="cell"
+    x="50"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.208s"
+/>
+
+<rect
+    class="cell"
+    x="50"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.244s"
+/>
+
+<rect
+    class="cell"
+    x="50"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.28s"
+/>
+
+<rect
+    class="cell"
+    x="66"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.13s"
+/>
+
+<rect
+    class="cell"
+    x="66"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.166s"
+/>
+
+<rect
+    class="cell"
+    x="66"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.202s"
+/>
+
+<rect
+    class="cell"
+    x="66"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.238s"
+/>
+
+<rect
+    class="cell"
+    x="66"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.273s"
+/>
+
+<rect
+    class="cell"
+    x="66"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.309s"
+/>
+
+<rect
+    class="cell"
+    x="66"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.345s"
+/>
+
+<rect
+    class="cell"
+    x="82"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.195s"
+/>
+
+<rect
+    class="cell"
+    x="82"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.231s"
+/>
+
+<rect
+    class="cell"
+    x="82"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.267s"
+/>
+
+<rect
+    class="cell"
+    x="82"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.303s"
+/>
+
+<rect
+    class="cell"
+    x="82"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.339s"
+/>
+
+<rect
+    class="cell"
+    x="82"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.374s"
+/>
+
+<rect
+    class="cell"
+    x="82"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.41s"
+/>
+
+<rect
+    class="cell"
+    x="98"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.26s"
+/>
+
+<rect
+    class="cell"
+    x="98"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.296s"
+/>
+
+<rect
+    class="cell"
+    x="98"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.332s"
+/>
+
+<rect
+    class="cell"
+    x="98"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.368s"
+/>
+
+<rect
+    class="cell"
+    x="98"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.404s"
+/>
+
+<rect
+    class="cell"
+    x="98"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.439s"
+/>
+
+<rect
+    class="cell"
+    x="98"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.475s"
+/>
+
+<rect
+    class="cell"
+    x="114"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.325s"
+/>
+
+<rect
+    class="cell"
+    x="114"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.361s"
+/>
+
+<rect
+    class="cell"
+    x="114"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.397s"
+/>
+
+<rect
+    class="cell"
+    x="114"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.433s"
+/>
+
+<rect
+    class="cell"
+    x="114"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.469s"
+/>
+
+<rect
+    class="cell"
+    x="114"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.505s"
+/>
+
+<rect
+    class="cell"
+    x="114"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.54s"
+/>
+
+<rect
+    class="cell"
+    x="130"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.391s"
+/>
+
+<rect
+    class="cell"
+    x="130"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.426s"
+/>
+
+<rect
+    class="cell"
+    x="130"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.462s"
+/>
+
+<rect
+    class="cell"
+    x="130"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.498s"
+/>
+
+<rect
+    class="cell"
+    x="130"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.534s"
+/>
+
+<rect
+    class="cell"
+    x="130"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.57s"
+/>
+
+<rect
+    class="cell"
+    x="130"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.605s"
+/>
+
+<rect
+    class="cell"
+    x="146"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.456s"
+/>
+
+<rect
+    class="cell"
+    x="146"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.492s"
+/>
+
+<rect
+    class="cell"
+    x="146"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.527s"
+/>
+
+<rect
+    class="cell"
+    x="146"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.563s"
+/>
+
+<rect
+    class="cell"
+    x="146"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.599s"
+/>
+
+<rect
+    class="cell"
+    x="146"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.635s"
+/>
+
+<rect
+    class="cell"
+    x="146"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.671s"
+/>
+
+<rect
+    class="cell"
+    x="162"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.521s"
+/>
+
+<rect
+    class="cell"
+    x="162"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.557s"
+/>
+
+<rect
+    class="cell"
+    x="162"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.592s"
+/>
+
+<rect
+    class="cell"
+    x="162"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.628s"
+/>
+
+<rect
+    class="cell"
+    x="162"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.664s"
+/>
+
+<rect
+    class="cell"
+    x="162"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.7s"
+/>
+
+<rect
+    class="cell"
+    x="162"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.736s"
+/>
+
+<rect
+    class="cell"
+    x="178"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.586s"
+/>
+
+<rect
+    class="cell"
+    x="178"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.622s"
+/>
+
+<rect
+    class="cell"
+    x="178"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.658s"
+/>
+
+<rect
+    class="cell"
+    x="178"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.693s"
+/>
+
+<rect
+    class="cell"
+    x="178"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.729s"
+/>
+
+<rect
+    class="cell"
+    x="178"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.765s"
+/>
+
+<rect
+    class="cell"
+    x="178"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.801s"
+/>
+
+<rect
+    class="cell"
+    x="194"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.651s"
+/>
+
+<rect
+    class="cell"
+    x="194"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.687s"
+/>
+
+<rect
+    class="cell"
+    x="194"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.723s"
+/>
+
+<rect
+    class="cell"
+    x="194"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.758s"
+/>
+
+<rect
+    class="cell"
+    x="194"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.794s"
+/>
+
+<rect
+    class="cell"
+    x="194"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.83s"
+/>
+
+<rect
+    class="cell"
+    x="194"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.866s"
+/>
+
+<rect
+    class="cell"
+    x="210"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.716s"
+/>
+
+<rect
+    class="cell"
+    x="210"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.752s"
+/>
+
+<rect
+    class="cell"
+    x="210"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.788s"
+/>
+
+<rect
+    class="cell"
+    x="210"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.824s"
+/>
+
+<rect
+    class="cell"
+    x="210"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.859s"
+/>
+
+<rect
+    class="cell"
+    x="210"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.895s"
+/>
+
+<rect
+    class="cell"
+    x="210"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.931s"
+/>
+
+<rect
+    class="cell"
+    x="226"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.781s"
+/>
+
+<rect
+    class="cell"
+    x="226"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.817s"
+/>
+
+<rect
+    class="cell"
+    x="226"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.853s"
+/>
+
+<rect
+    class="cell"
+    x="226"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.889s"
+/>
+
+<rect
+    class="cell"
+    x="226"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.924s"
+/>
+
+<rect
+    class="cell"
+    x="226"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.96s"
+/>
+
+<rect
+    class="cell"
+    x="226"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.996s"
+/>
+
+<rect
+    class="cell"
+    x="242"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.846s"
+/>
+
+<rect
+    class="cell"
+    x="242"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.882s"
+/>
+
+<rect
+    class="cell"
+    x="242"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.918s"
+/>
+
+<rect
+    class="cell"
+    x="242"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.954s"
+/>
+
+<rect
+    class="cell"
+    x="242"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.99s"
+/>
+
+<rect
+    class="cell"
+    x="242"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.025s"
+/>
+
+<rect
+    class="cell"
+    x="242"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.061s"
+/>
+
+<rect
+    class="cell"
+    x="258"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.911s"
+/>
+
+<rect
+    class="cell"
+    x="258"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.947s"
+/>
+
+<rect
+    class="cell"
+    x="258"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.983s"
+/>
+
+<rect
+    class="cell"
+    x="258"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.019s"
+/>
+
+<rect
+    class="cell"
+    x="258"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.055s"
+/>
+
+<rect
+    class="cell"
+    x="258"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.09s"
+/>
+
+<rect
+    class="cell"
+    x="258"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.126s"
+/>
+
+<rect
+    class="cell"
+    x="274"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:0.976s"
+/>
+
+<rect
+    class="cell"
+    x="274"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.012s"
+/>
+
+<rect
+    class="cell"
+    x="274"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.048s"
+/>
+
+<rect
+    class="cell"
+    x="274"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.084s"
+/>
+
+<rect
+    class="cell"
+    x="274"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.12s"
+/>
+
+<rect
+    class="cell"
+    x="274"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.156s"
+/>
+
+<rect
+    class="cell"
+    x="274"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.191s"
+/>
+
+<rect
+    class="cell"
+    x="290"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.042s"
+/>
+
+<rect
+    class="cell"
+    x="290"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.077s"
+/>
+
+<rect
+    class="cell"
+    x="290"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.113s"
+/>
+
+<rect
+    class="cell"
+    x="290"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.149s"
+/>
+
+<rect
+    class="cell"
+    x="290"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.185s"
+/>
+
+<rect
+    class="cell"
+    x="290"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.221s"
+/>
+
+<rect
+    class="cell"
+    x="290"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.256s"
+/>
+
+<rect
+    class="cell"
+    x="306"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.107s"
+/>
+
+<rect
+    class="cell"
+    x="306"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.142s"
+/>
+
+<rect
+    class="cell"
+    x="306"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.178s"
+/>
+
+<rect
+    class="cell"
+    x="306"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.214s"
+/>
+
+<rect
+    class="cell"
+    x="306"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.25s"
+/>
+
+<rect
+    class="cell"
+    x="306"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.286s"
+/>
+
+<rect
+    class="cell"
+    x="306"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.322s"
+/>
+
+<rect
+    class="cell"
+    x="322"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.172s"
+/>
+
+<rect
+    class="cell"
+    x="322"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.208s"
+/>
+
+<rect
+    class="cell"
+    x="322"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.243s"
+/>
+
+<rect
+    class="cell"
+    x="322"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.279s"
+/>
+
+<rect
+    class="cell"
+    x="322"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.315s"
+/>
+
+<rect
+    class="cell"
+    x="322"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.351s"
+/>
+
+<rect
+    class="cell"
+    x="322"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.387s"
+/>
+
+<rect
+    class="cell"
+    x="338"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.237s"
+/>
+
+<rect
+    class="cell"
+    x="338"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.273s"
+/>
+
+<rect
+    class="cell"
+    x="338"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.308s"
+/>
+
+<rect
+    class="cell"
+    x="338"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.344s"
+/>
+
+<rect
+    class="cell"
+    x="338"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.38s"
+/>
+
+<rect
+    class="cell"
+    x="338"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.416s"
+/>
+
+<rect
+    class="cell"
+    x="338"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.452s"
+/>
+
+<rect
+    class="cell"
+    x="354"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.302s"
+/>
+
+<rect
+    class="cell"
+    x="354"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.338s"
+/>
+
+<rect
+    class="cell"
+    x="354"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.374s"
+/>
+
+<rect
+    class="cell"
+    x="354"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.409s"
+/>
+
+<rect
+    class="cell"
+    x="354"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.445s"
+/>
+
+<rect
+    class="cell"
+    x="354"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.481s"
+/>
+
+<rect
+    class="cell"
+    x="354"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.517s"
+/>
+
+<rect
+    class="cell"
+    x="370"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.367s"
+/>
+
+<rect
+    class="cell"
+    x="370"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.403s"
+/>
+
+<rect
+    class="cell"
+    x="370"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.439s"
+/>
+
+<rect
+    class="cell"
+    x="370"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.475s"
+/>
+
+<rect
+    class="cell"
+    x="370"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.51s"
+/>
+
+<rect
+    class="cell"
+    x="370"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.546s"
+/>
+
+<rect
+    class="cell"
+    x="370"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.582s"
+/>
+
+<rect
+    class="cell"
+    x="386"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.432s"
+/>
+
+<rect
+    class="cell"
+    x="386"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.468s"
+/>
+
+<rect
+    class="cell"
+    x="386"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.504s"
+/>
+
+<rect
+    class="cell"
+    x="386"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.54s"
+/>
+
+<rect
+    class="cell"
+    x="386"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.575s"
+/>
+
+<rect
+    class="cell"
+    x="386"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.611s"
+/>
+
+<rect
+    class="cell"
+    x="386"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.647s"
+/>
+
+<rect
+    class="cell"
+    x="402"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.497s"
+/>
+
+<rect
+    class="cell"
+    x="402"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.533s"
+/>
+
+<rect
+    class="cell"
+    x="402"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.569s"
+/>
+
+<rect
+    class="cell"
+    x="402"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.605s"
+/>
+
+<rect
+    class="cell"
+    x="402"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.641s"
+/>
+
+<rect
+    class="cell"
+    x="402"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.676s"
+/>
+
+<rect
+    class="cell"
+    x="402"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.712s"
+/>
+
+<rect
+    class="cell"
+    x="418"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.562s"
+/>
+
+<rect
+    class="cell"
+    x="418"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.598s"
+/>
+
+<rect
+    class="cell"
+    x="418"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.634s"
+/>
+
+<rect
+    class="cell"
+    x="418"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.67s"
+/>
+
+<rect
+    class="cell"
+    x="418"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.706s"
+/>
+
+<rect
+    class="cell"
+    x="418"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.741s"
+/>
+
+<rect
+    class="cell"
+    x="418"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.777s"
+/>
+
+<rect
+    class="cell"
+    x="434"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.627s"
+/>
+
+<rect
+    class="cell"
+    x="434"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.663s"
+/>
+
+<rect
+    class="cell"
+    x="434"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.699s"
+/>
+
+<rect
+    class="cell"
+    x="434"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.735s"
+/>
+
+<rect
+    class="cell"
+    x="434"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.771s"
+/>
+
+<rect
+    class="cell"
+    x="434"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.807s"
+/>
+
+<rect
+    class="cell"
+    x="434"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.842s"
+/>
+
+<rect
+    class="cell"
+    x="450"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.693s"
+/>
+
+<rect
+    class="cell"
+    x="450"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.728s"
+/>
+
+<rect
+    class="cell"
+    x="450"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.764s"
+/>
+
+<rect
+    class="cell"
+    x="450"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.8s"
+/>
+
+<rect
+    class="cell"
+    x="450"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.836s"
+/>
+
+<rect
+    class="cell"
+    x="450"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.872s"
+/>
+
+<rect
+    class="cell"
+    x="450"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.907s"
+/>
+
+<rect
+    class="cell"
+    x="466"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.758s"
+/>
+
+<rect
+    class="cell"
+    x="466"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.793s"
+/>
+
+<rect
+    class="cell"
+    x="466"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.829s"
+/>
+
+<rect
+    class="cell"
+    x="466"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.865s"
+/>
+
+<rect
+    class="cell"
+    x="466"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.901s"
+/>
+
+<rect
+    class="cell"
+    x="466"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.937s"
+/>
+
+<rect
+    class="cell"
+    x="466"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.973s"
+/>
+
+<rect
+    class="cell"
+    x="482"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.823s"
+/>
+
+<rect
+    class="cell"
+    x="482"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.859s"
+/>
+
+<rect
+    class="cell"
+    x="482"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.894s"
+/>
+
+<rect
+    class="cell"
+    x="482"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.93s"
+/>
+
+<rect
+    class="cell"
+    x="482"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.966s"
+/>
+
+<rect
+    class="cell"
+    x="482"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.002s"
+/>
+
+<rect
+    class="cell"
+    x="482"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.038s"
+/>
+
+<rect
+    class="cell"
+    x="498"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.888s"
+/>
+
+<rect
+    class="cell"
+    x="498"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.924s"
+/>
+
+<rect
+    class="cell"
+    x="498"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.959s"
+/>
+
+<rect
+    class="cell"
+    x="498"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.995s"
+/>
+
+<rect
+    class="cell"
+    x="498"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.031s"
+/>
+
+<rect
+    class="cell"
+    x="498"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.067s"
+/>
+
+<rect
+    class="cell"
+    x="498"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.103s"
+/>
+
+<rect
+    class="cell"
+    x="514"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.953s"
+/>
+
+<rect
+    class="cell"
+    x="514"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:1.989s"
+/>
+
+<rect
+    class="cell"
+    x="514"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.025s"
+/>
+
+<rect
+    class="cell"
+    x="514"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.06s"
+/>
+
+<rect
+    class="cell"
+    x="514"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.096s"
+/>
+
+<rect
+    class="cell"
+    x="514"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.132s"
+/>
+
+<rect
+    class="cell"
+    x="514"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.168s"
+/>
+
+<rect
+    class="cell"
+    x="530"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.018s"
+/>
+
+<rect
+    class="cell"
+    x="530"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.054s"
+/>
+
+<rect
+    class="cell"
+    x="530"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.09s"
+/>
+
+<rect
+    class="cell"
+    x="530"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.125s"
+/>
+
+<rect
+    class="cell"
+    x="530"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.161s"
+/>
+
+<rect
+    class="cell"
+    x="530"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.197s"
+/>
+
+<rect
+    class="cell"
+    x="530"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.233s"
+/>
+
+<rect
+    class="cell"
+    x="546"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.083s"
+/>
+
+<rect
+    class="cell"
+    x="546"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.119s"
+/>
+
+<rect
+    class="cell"
+    x="546"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.155s"
+/>
+
+<rect
+    class="cell"
+    x="546"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.191s"
+/>
+
+<rect
+    class="cell"
+    x="546"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.226s"
+/>
+
+<rect
+    class="cell"
+    x="546"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.262s"
+/>
+
+<rect
+    class="cell"
+    x="546"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.298s"
+/>
+
+<rect
+    class="cell"
+    x="562"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.148s"
+/>
+
+<rect
+    class="cell"
+    x="562"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.184s"
+/>
+
+<rect
+    class="cell"
+    x="562"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.22s"
+/>
+
+<rect
+    class="cell"
+    x="562"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.256s"
+/>
+
+<rect
+    class="cell"
+    x="562"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.292s"
+/>
+
+<rect
+    class="cell"
+    x="562"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.327s"
+/>
+
+<rect
+    class="cell"
+    x="562"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.363s"
+/>
+
+<rect
+    class="cell"
+    x="578"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.213s"
+/>
+
+<rect
+    class="cell"
+    x="578"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.249s"
+/>
+
+<rect
+    class="cell"
+    x="578"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.285s"
+/>
+
+<rect
+    class="cell"
+    x="578"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.321s"
+/>
+
+<rect
+    class="cell"
+    x="578"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.357s"
+/>
+
+<rect
+    class="cell"
+    x="578"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.392s"
+/>
+
+<rect
+    class="cell"
+    x="578"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.428s"
+/>
+
+<rect
+    class="cell"
+    x="594"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.278s"
+/>
+
+<rect
+    class="cell"
+    x="594"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.314s"
+/>
+
+<rect
+    class="cell"
+    x="594"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.35s"
+/>
+
+<rect
+    class="cell"
+    x="594"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.386s"
+/>
+
+<rect
+    class="cell"
+    x="594"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.422s"
+/>
+
+<rect
+    class="cell"
+    x="594"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.458s"
+/>
+
+<rect
+    class="cell"
+    x="594"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.493s"
+/>
+
+<rect
+    class="cell"
+    x="610"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.344s"
+/>
+
+<rect
+    class="cell"
+    x="610"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.379s"
+/>
+
+<rect
+    class="cell"
+    x="610"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.415s"
+/>
+
+<rect
+    class="cell"
+    x="610"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.451s"
+/>
+
+<rect
+    class="cell"
+    x="610"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.487s"
+/>
+
+<rect
+    class="cell"
+    x="610"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.523s"
+/>
+
+<rect
+    class="cell"
+    x="610"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.558s"
+/>
+
+<rect
+    class="cell"
+    x="626"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.409s"
+/>
+
+<rect
+    class="cell"
+    x="626"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.444s"
+/>
+
+<rect
+    class="cell"
+    x="626"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.48s"
+/>
+
+<rect
+    class="cell"
+    x="626"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.516s"
+/>
+
+<rect
+    class="cell"
+    x="626"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.552s"
+/>
+
+<rect
+    class="cell"
+    x="626"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.588s"
+/>
+
+<rect
+    class="cell"
+    x="626"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.624s"
+/>
+
+<rect
+    class="cell"
+    x="642"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.474s"
+/>
+
+<rect
+    class="cell"
+    x="642"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.51s"
+/>
+
+<rect
+    class="cell"
+    x="642"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.545s"
+/>
+
+<rect
+    class="cell"
+    x="642"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.581s"
+/>
+
+<rect
+    class="cell"
+    x="642"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.617s"
+/>
+
+<rect
+    class="cell"
+    x="642"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.653s"
+/>
+
+<rect
+    class="cell"
+    x="642"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.689s"
+/>
+
+<rect
+    class="cell"
+    x="658"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.539s"
+/>
+
+<rect
+    class="cell"
+    x="658"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.575s"
+/>
+
+<rect
+    class="cell"
+    x="658"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.61s"
+/>
+
+<rect
+    class="cell"
+    x="658"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.646s"
+/>
+
+<rect
+    class="cell"
+    x="658"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.682s"
+/>
+
+<rect
+    class="cell"
+    x="658"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.718s"
+/>
+
+<rect
+    class="cell"
+    x="658"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.754s"
+/>
+
+<rect
+    class="cell"
+    x="674"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.604s"
+/>
+
+<rect
+    class="cell"
+    x="674"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.64s"
+/>
+
+<rect
+    class="cell"
+    x="674"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.676s"
+/>
+
+<rect
+    class="cell"
+    x="674"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.711s"
+/>
+
+<rect
+    class="cell"
+    x="674"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.747s"
+/>
+
+<rect
+    class="cell"
+    x="674"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.783s"
+/>
+
+<rect
+    class="cell"
+    x="674"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.819s"
+/>
+
+<rect
+    class="cell"
+    x="690"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.669s"
+/>
+
+<rect
+    class="cell"
+    x="690"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.705s"
+/>
+
+<rect
+    class="cell"
+    x="690"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.741s"
+/>
+
+<rect
+    class="cell"
+    x="690"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.776s"
+/>
+
+<rect
+    class="cell"
+    x="690"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.812s"
+/>
+
+<rect
+    class="cell"
+    x="690"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.848s"
+/>
+
+<rect
+    class="cell"
+    x="690"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.884s"
+/>
+
+<rect
+    class="cell"
+    x="706"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.734s"
+/>
+
+<rect
+    class="cell"
+    x="706"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.77s"
+/>
+
+<rect
+    class="cell"
+    x="706"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.806s"
+/>
+
+<rect
+    class="cell"
+    x="706"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.842s"
+/>
+
+<rect
+    class="cell"
+    x="706"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.877s"
+/>
+
+<rect
+    class="cell"
+    x="706"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.913s"
+/>
+
+<rect
+    class="cell"
+    x="706"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.949s"
+/>
+
+<rect
+    class="cell"
+    x="722"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.799s"
+/>
+
+<rect
+    class="cell"
+    x="722"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.835s"
+/>
+
+<rect
+    class="cell"
+    x="722"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.871s"
+/>
+
+<rect
+    class="cell"
+    x="722"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.907s"
+/>
+
+<rect
+    class="cell"
+    x="722"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.942s"
+/>
+
+<rect
+    class="cell"
+    x="722"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.978s"
+/>
+
+<rect
+    class="cell"
+    x="722"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.014s"
+/>
+
+<rect
+    class="cell"
+    x="738"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.864s"
+/>
+
+<rect
+    class="cell"
+    x="738"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.9s"
+/>
+
+<rect
+    class="cell"
+    x="738"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.936s"
+/>
+
+<rect
+    class="cell"
+    x="738"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.972s"
+/>
+
+<rect
+    class="cell"
+    x="738"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.008s"
+/>
+
+<rect
+    class="cell"
+    x="738"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.043s"
+/>
+
+<rect
+    class="cell"
+    x="738"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.079s"
+/>
+
+<rect
+    class="cell"
+    x="754"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.929s"
+/>
+
+<rect
+    class="cell"
+    x="754"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.965s"
+/>
+
+<rect
+    class="cell"
+    x="754"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.001s"
+/>
+
+<rect
+    class="cell"
+    x="754"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.037s"
+/>
+
+<rect
+    class="cell"
+    x="754"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.073s"
+/>
+
+<rect
+    class="cell"
+    x="754"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.108s"
+/>
+
+<rect
+    class="cell"
+    x="754"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.144s"
+/>
+
+<rect
+    class="cell"
+    x="770"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:2.995s"
+/>
+
+<rect
+    class="cell"
+    x="770"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.03s"
+/>
+
+<rect
+    class="cell"
+    x="770"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.066s"
+/>
+
+<rect
+    class="cell"
+    x="770"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.102s"
+/>
+
+<rect
+    class="cell"
+    x="770"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.138s"
+/>
+
+<rect
+    class="cell"
+    x="770"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.174s"
+/>
+
+<rect
+    class="cell"
+    x="770"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.209s"
+/>
+
+<rect
+    class="cell"
+    x="786"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.06s"
+/>
+
+<rect
+    class="cell"
+    x="786"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.095s"
+/>
+
+<rect
+    class="cell"
+    x="786"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.131s"
+/>
+
+<rect
+    class="cell"
+    x="786"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.167s"
+/>
+
+<rect
+    class="cell"
+    x="786"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.203s"
+/>
+
+<rect
+    class="cell"
+    x="786"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.239s"
+/>
+
+<rect
+    class="cell"
+    x="786"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.275s"
+/>
+
+<rect
+    class="cell"
+    x="802"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.125s"
+/>
+
+<rect
+    class="cell"
+    x="802"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.161s"
+/>
+
+<rect
+    class="cell"
+    x="802"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.196s"
+/>
+
+<rect
+    class="cell"
+    x="802"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.232s"
+/>
+
+<rect
+    class="cell"
+    x="802"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.268s"
+/>
+
+<rect
+    class="cell"
+    x="802"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.304s"
+/>
+
+<rect
+    class="cell"
+    x="802"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.34s"
+/>
+
+<rect
+    class="cell"
+    x="818"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.19s"
+/>
+
+<rect
+    class="cell"
+    x="818"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.226s"
+/>
+
+<rect
+    class="cell"
+    x="818"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.261s"
+/>
+
+<rect
+    class="cell"
+    x="818"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.297s"
+/>
+
+<rect
+    class="cell"
+    x="818"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.333s"
+/>
+
+<rect
+    class="cell"
+    x="818"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.369s"
+/>
+
+<rect
+    class="cell"
+    x="818"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.405s"
+/>
+
+<rect
+    class="cell"
+    x="834"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.255s"
+/>
+
+<rect
+    class="cell"
+    x="834"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.291s"
+/>
+
+<rect
+    class="cell"
+    x="834"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.327s"
+/>
+
+<rect
+    class="cell"
+    x="834"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.362s"
+/>
+
+<rect
+    class="cell"
+    x="834"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.398s"
+/>
+
+<rect
+    class="cell"
+    x="834"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.434s"
+/>
+
+<rect
+    class="cell"
+    x="834"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.47s"
+/>
+
+<rect
+    class="cell"
+    x="850"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.32s"
+/>
+
+<rect
+    class="cell"
+    x="850"
+    y="40"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.356s"
+/>
+
+<rect
+    class="cell"
+    x="850"
+    y="56"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.392s"
+/>
+
+<rect
+    class="cell"
+    x="850"
+    y="72"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.427s"
+/>
+
+<rect
+    class="cell"
+    x="850"
+    y="88"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.463s"
+/>
+
+<rect
+    class="cell"
+    x="850"
+    y="104"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.499s"
+/>
+
+<rect
+    class="cell"
+    x="850"
+    y="120"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.535s"
+/>
+
+<rect
+    class="cell"
+    x="866"
+    y="24"
+    width="13"
+    height="13"
+    rx="2.5"
+    fill="#161b22"
+    style="animation-delay:3.385s"
+/>
+
+
+
 <text
-    x="{legend_x + 80}"
-    y="{legend_y + 10}"
-    fill="{TEXT}"
-    font-size="9">
-    More
+    class="total"
+    x="34"
+    y="152"
+>
+    0 contributions in the last year
 </text>
-'''
-    )
-
-    svg.append("</svg>")
-
-    return "\n".join(svg)
 
 
-def main():
-    print(f"Fetching GitHub contributions for {USERNAME}...")
-
-    calendar = fetch_contributions()
-
-    svg = generate_svg(calendar)
-
-    with open(OUTPUT, "w", encoding="utf-8") as file:
-        file.write(svg)
-
-    total = sum(
-        day["contributionCount"]
-        for week in calendar["weeks"]
-        for day in week["contributionDays"]
-    )
-
-    print(f"Generated {OUTPUT}")
-    print(f"GitHub contributions found: {total}")
-
-
-if __name__ == "__main__":
-    main()
+</svg>
