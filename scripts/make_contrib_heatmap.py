@@ -34,44 +34,70 @@ def get_contributions(username):
     request = urllib.request.Request(
         url,
         headers={
-            "User-Agent": "Mozilla/5.0"
-        }
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "text/html",
+        },
     )
 
-    with urllib.request.urlopen(request, timeout=30) as response:
-        html = response.read().decode("utf-8")
-
-    pattern = re.compile(
-        r'data-date="(\d{4}-\d{2}-\d{2})"'
-        r'[^>]*data-level="(\d)"'
-        r'[^>]*>'
-    )
-
-    matches = pattern.findall(html)
-
-    if not matches:
-        raise RuntimeError(
-            "Could not read contribution data from GitHub."
+    with urllib.request.urlopen(
+        request,
+        timeout=30
+    ) as response:
+        html = response.read().decode(
+            "utf-8",
+            errors="ignore"
         )
+
+    # GitHub currently renders contribution days as:
+    # <td class="ContributionCalendar-day"
+    #     data-date="YYYY-MM-DD"
+    #     data-level="0-4">
+    day_tags = re.findall(
+        r'<td[^>]*ContributionCalendar-day[^>]*>',
+        html,
+        flags=re.IGNORECASE,
+    )
 
     contributions = []
 
-    for date, level in matches:
+    for tag in day_tags:
+
+        date_match = re.search(
+            r'data-date="(\d{4}-\d{2}-\d{2})"',
+            tag
+        )
+
+        level_match = re.search(
+            r'data-level="(\d)"',
+            tag
+        )
+
+        if not date_match or not level_match:
+            continue
+
         contributions.append({
-            "date": date,
-            "level": int(level),
+            "date": date_match.group(1),
+            "level": int(level_match.group(1)),
         })
 
+    if not contributions:
+        raise RuntimeError(
+            "No GitHub contribution calendar cells were found."
+        )
+
+    # Try to read the total displayed by GitHub.
     total_match = re.search(
-        r'([\d,]+)\s+contributions?\s+in\s+the\s+last\s+year',
+        r'([\d,]+)\s+contributions?',
         html,
-        re.IGNORECASE,
+        flags=re.IGNORECASE,
     )
 
     if total_match:
-        total = int(total_match.group(1).replace(",", ""))
+        total = int(
+            total_match.group(1).replace(",", "")
+        )
     else:
-        total = 0
+        total = None
 
     return contributions, total
 
@@ -300,7 +326,7 @@ svg = f'''
     x="{LEFT}"
     y="{height - 6}"
 >
-    {total:,} contributions in the last year
+    {"Contribution activity" if total is None else f"{total:,} contributions in the last year"}
 </text>
 
 
