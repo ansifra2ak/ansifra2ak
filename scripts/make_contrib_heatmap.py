@@ -1,6 +1,6 @@
-import json
-import os
+import re
 import urllib.request
+from datetime import datetime
 
 
 USER = "ansifra2ak"
@@ -28,47 +28,71 @@ MONTHS = [
 ]
 
 
-def get_data(username):
-    url = f"https://github-contributions-api.jogruber.de/v4/{username}?y=last"
+def get_contributions(username):
+    url = f"https://github.com/users/{username}/contributions"
 
-    with urllib.request.urlopen(
+    request = urllib.request.Request(
         url,
-        timeout=25
-    ) as response:
-        return json.loads(
-            response.read().decode()
+        headers={
+            "User-Agent": "Mozilla/5.0"
+        }
+    )
+
+    with urllib.request.urlopen(request, timeout=30) as response:
+        html = response.read().decode("utf-8")
+
+    pattern = re.compile(
+        r'data-date="(\d{4}-\d{2}-\d{2})"'
+        r'[^>]*data-level="(\d)"'
+        r'[^>]*>'
+    )
+
+    matches = pattern.findall(html)
+
+    if not matches:
+        raise RuntimeError(
+            "Could not read contribution data from GitHub."
         )
 
+    contributions = []
 
-data = get_data(USER)
+    for date, level in matches:
+        contributions.append({
+            "date": date,
+            "level": int(level),
+        })
 
-contributions = data["contributions"]
+    total_match = re.search(
+        r'([\d,]+)\s+contributions?\s+in\s+the\s+last\s+year',
+        html,
+        re.IGNORECASE,
+    )
 
-total = data["total"]["lastYear"]
+    if total_match:
+        total = int(total_match.group(1).replace(",", ""))
+    else:
+        total = 0
 
+    return contributions, total
+
+
+contributions, total = get_contributions(USER)
+
+contributions.sort(
+    key=lambda item: datetime.strptime(
+        item["date"],
+        "%Y-%m-%d"
+    )
+)
 
 n = len(contributions)
-
 weeks = (n + 6) // 7
-
 step = CELL + GAP
 
-
-width = (
-    LEFT
-    + weeks * step
-    + 6
-)
-
-height = (
-    TOP
-    + 7 * step
-    + 22
-)
-
+width = LEFT + weeks * step + 6
+height = TOP + 7 * step + 22
 
 labels = []
-
 rects = []
 
 
@@ -153,16 +177,12 @@ max_order = (
 )
 
 REVEAL = 3.6
-
 DURATION = 0.55
 
 
-for i, contribution in enumerate(
-    contributions
-):
+for i, contribution in enumerate(contributions):
 
     week = i // 7
-
     row = i % 7
 
     level = contribution["level"]
@@ -178,22 +198,16 @@ for i, contribution in enumerate(
     )
 
     delay = round(
-
         (
             week
             + row * 0.55
         )
-
         / max_order
-
         * REVEAL,
-
         3
     )
 
-
     rects.append(
-
         f'''
 <rect
     class="cell"
@@ -300,15 +314,8 @@ with open(
     encoding="utf-8"
 ) as file:
 
-    file.write(
-        svg
-    )
+    file.write(svg)
 
 
-print(
-    f"Created {OUT}"
-)
-
-print(
-    f"{total:,} contributions"
-)
+print(f"Created {OUT}")
+print(f"{total:,} contributions")
