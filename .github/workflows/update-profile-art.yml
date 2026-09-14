@@ -44,7 +44,7 @@ jobs:
         run: |
           python scripts/make_contrib_heatmap.py
 
-            - name: Commit generated profile art
+      - name: Commit generated profile art
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
